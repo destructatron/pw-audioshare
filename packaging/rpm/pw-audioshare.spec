@@ -1,5 +1,5 @@
 Name:           pw-audioshare
-Version:        1.0.0
+Version:        1.0.1
 Release:        1%{?dist}
 Summary:        An accessible GTK4 patchbay for PipeWire
 
@@ -46,5 +46,8 @@ install -Dm755 target/release/%{name} %{buildroot}%{_bindir}/%{name}
 %{_bindir}/%{name}
 
 %changelog
+* Sun Dec 08 2024 Harley <harley@destructatron> - 1.0.1-1
+- Add LICENSE file
+
 * Sun Dec 08 2024 Harley <harley@destructatron> - 1.0.0-1
 - Initial release
