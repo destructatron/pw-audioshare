@@ -46,8 +46,8 @@ install -Dm755 target/release/%{name} %{buildroot}%{_bindir}/%{name}
 %{_bindir}/%{name}
 
 %changelog
-* Sun Dec 08 2024 Harley <harley@destructatron> - 1.0.1-1
+* Mon Dec 08 2025 Harley Richardson <destructatron2018@gmail.com> - 1.0.1-1
 - Add LICENSE file
 
-* Sun Dec 08 2024 Harley <harley@destructatron> - 1.0.0-1
+* Mon Dec 08 2025 Harley Richardson <destructatron2018@gmail.com> - 1.0.0-1
 - Initial release
