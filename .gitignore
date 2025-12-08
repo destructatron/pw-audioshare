@@ -1,2 +1,18 @@
-/target
+# Rust build artifacts
+/target/
 Cargo.lock
+**/*.rs.bk
+
+# Claude Code
+.claude/
+
+# IDE and editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -3,6 +3,7 @@ mod config;
 mod model;
 mod pipewire;
 mod presets;
+mod tray;
 mod ui;
 
 use gtk::prelude::*;

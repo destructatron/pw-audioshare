@@ -1,5 +1,5 @@
 Name:           pw-audioshare
-Version:        1.0.3
+Version:        1.0.4
 Release:        1%{?dist}
 Summary:        An accessible GTK4 patchbay for PipeWire
 
@@ -47,6 +47,9 @@ install -Dm755 target/release/%{name} %{buildroot}%{_bindir}/%{name}
 %{_bindir}/%{name}
 
 %changelog
+* Mon Dec 08 2025 Harley Richardson <destructatron2018@gmail.com> - 1.0.4-1
+- Add system tray support (minimize to tray on close)
+
 * Mon Dec 08 2025 Harley Richardson <destructatron2018@gmail.com> - 1.0.3-1
 - Add auto-connect presets feature
 

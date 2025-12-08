@@ -1,6 +1,6 @@
 [package]
 name = "pw-audioshare"
-version = "1.0.3"
+version = "1.0.4"
 edition = "2021"
 rust-version = "1.75"
 description = "An accessible GTK4 patchbay for PipeWire"
@@ -38,6 +38,10 @@ serde_json = "1.0"
 
 # XDG directories
 dirs = "5.0"
+
+# System tray (StatusNotifierItem via D-Bus)
+ksni = "0.3"
+tokio = { version = "1", features = ["rt", "sync", "time"] }
 
 [profile.release]
 lto = true

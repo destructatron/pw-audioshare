@@ -9,6 +9,7 @@ An accessible GTK4 patchbay for PipeWire. Unlike visual node-graph tools like He
 - Bulk connect: select multiple ports and connect them at once
 - Save and load connection presets
 - **Auto-connect presets**: Activate a preset to automatically restore connections when apps start or restart
+- **System tray**: Runs in background when window is closed, keeps auto-connect active
 - Full keyboard navigation
 - Screen reader accessible
 
@@ -100,6 +101,17 @@ Presets are saved by node and port names, so they work across sessions even if p
 To deactivate auto-connect, use the "Deactivate Auto-connect" menu option. Note: Deactivating only stops watching for new connections - it does **not** remove any existing connections.
 
 Preset file location: `~/.config/pw-audioshare/presets.json`
+
+### System Tray
+
+The application minimizes to the system tray when you close the window, allowing it to continue running in the background (useful for auto-connect presets).
+
+- **Close window**: Hides to tray (app keeps running)
+- **Tray menu → Show**: Brings back the window
+- **Tray menu → Quit**: Exits the application
+- **Ctrl+Q**: Also exits the application
+
+**Note:** On GNOME, you need the [AppIndicator extension](https://extensions.gnome.org/extension/615/appindicator-support/) for the tray icon to appear. KDE and other desktops with StatusNotifierItem support work out of the box.
 
 ## License
 

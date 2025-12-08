@@ -2,18 +2,32 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use async_channel::Receiver;
 use gtk::{gio, glib};
+use std::sync::mpsc;
 
 use crate::config::APP_ID;
 use crate::pipewire::{PipeWireThread, PwEvent};
+use crate::presets::PresetStore;
+use crate::tray::{self, TrayCommand, TrayHandle};
 use crate::ui::Window;
 
 mod imp {
     use super::*;
     use std::cell::RefCell;
 
-    #[derive(Default)]
     pub struct Application {
         pub pw_thread: RefCell<Option<PipeWireThread>>,
+        pub tray_handle: RefCell<Option<TrayHandle>>,
+        pub tray_rx: RefCell<Option<mpsc::Receiver<TrayCommand>>>,
+    }
+
+    impl Default for Application {
+        fn default() -> Self {
+            Self {
+                pw_thread: RefCell::new(None),
+                tray_handle: RefCell::new(None),
+                tray_rx: RefCell::new(None),
+            }
+        }
     }
 
     #[glib::object_subclass]
@@ -42,6 +56,9 @@ mod imp {
 
             // Start PipeWire thread
             app.start_pipewire();
+
+            // Start system tray
+            app.start_tray();
         }
 
         fn shutdown(&self) {
@@ -80,6 +97,14 @@ impl Application {
         if let Some(thread) = self.imp().pw_thread.borrow().as_ref() {
             window.set_command_sender(thread.command_sender());
         }
+
+        // Override close-request to minimize to tray instead of quitting
+        window.connect_close_request(|window| {
+            // Hide the window instead of closing
+            window.set_visible(false);
+            // Stop the event from propagating (prevents actual close)
+            glib::Propagation::Stop
+        });
 
         window
     }
@@ -140,6 +165,62 @@ impl Application {
         }
 
         log::debug!("PipeWire event channel closed");
+    }
+
+    /// Start the system tray
+    fn start_tray(&self) {
+        // Get active preset name to show in tray
+        let active_preset = PresetStore::load().active_preset;
+
+        // Spawn tray in background thread
+        let (tray_rx, tray_handle) = tray::spawn_tray(active_preset);
+
+        self.imp().tray_handle.replace(Some(tray_handle));
+        self.imp().tray_rx.replace(Some(tray_rx));
+
+        log::info!("System tray started");
+
+        // Set up polling for tray commands on GTK main loop
+        glib::timeout_add_local(
+            std::time::Duration::from_millis(100),
+            glib::clone!(
+                #[weak(rename_to = app)]
+                self,
+                #[upgrade_or]
+                glib::ControlFlow::Break,
+                move || {
+                    app.process_tray_commands();
+                    glib::ControlFlow::Continue
+                }
+            ),
+        );
+    }
+
+    /// Process pending tray commands
+    fn process_tray_commands(&self) {
+        let rx = self.imp().tray_rx.borrow();
+        if let Some(rx) = rx.as_ref() {
+            // Process all pending commands (non-blocking)
+            while let Ok(cmd) = rx.try_recv() {
+                match cmd {
+                    TrayCommand::Show => {
+                        log::debug!("Tray: Show window");
+                        if let Some(window) = self.active_window() {
+                            window.set_visible(true);
+                            window.present();
+                        } else {
+                            // No window exists, create one
+                            let window = self.create_window();
+                            window.present();
+                        }
+                    }
+                    TrayCommand::Quit => {
+                        log::debug!("Tray: Quit application");
+                        self.quit();
+                    }
+                }
+            }
+        }
     }
 }
 
