@@ -22,12 +22,12 @@ An accessible GTK4 patchbay for PipeWire. Unlike visual node-graph tools like He
 
 On Fedora:
 ```bash
-sudo dnf install gtk4-devel libadwaita-devel pipewire-devel
+sudo dnf install rust cargo gtk4-devel libadwaita-devel pipewire-devel
 ```
 
 On Debian/Ubuntu:
 ```bash
-sudo apt install libgtk-4-dev libadwaita-1-dev libpipewire-0.3-dev
+sudo apt install rustc cargo libgtk-4-dev libadwaita-1-dev libpipewire-0.3-dev
 ```
 
 ### Building
@@ -50,7 +50,7 @@ The interface has three main sections:
 
 1. Select one or more output ports in the left list
 2. Select one or more input ports in the right list
-3. Press Enter or click Connect
+3. Press Ctrl+Enter or click Connect
 
 Connection modes:
 - **1 output to N inputs**: Connects to all selected inputs (e.g., mono mic to stereo speakers)
