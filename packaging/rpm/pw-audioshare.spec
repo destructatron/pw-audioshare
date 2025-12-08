@@ -1,5 +1,5 @@
 Name:           pw-audioshare
-Version:        1.0.1
+Version:        1.0.2
 Release:        1%{?dist}
 Summary:        An accessible GTK4 patchbay for PipeWire
 
@@ -10,6 +10,7 @@ Source0:        %{url}/archive/v%{version}/%{name}-%{version}.tar.gz
 BuildRequires:  rust >= 1.75
 BuildRequires:  cargo
 BuildRequires:  gcc
+BuildRequires:  clang-devel
 BuildRequires:  gtk4-devel >= 4.12
 BuildRequires:  libadwaita-devel >= 1.4
 BuildRequires:  pipewire-devel
@@ -46,6 +47,9 @@ install -Dm755 target/release/%{name} %{buildroot}%{_bindir}/%{name}
 %{_bindir}/%{name}
 
 %changelog
+* Mon Dec 08 2025 Harley Richardson <destructatron2018@gmail.com> - 1.0.2-1
+- Add clang-devel build dependency for pipewire-rs bindgen
+
 * Mon Dec 08 2025 Harley Richardson <destructatron2018@gmail.com> - 1.0.1-1
 - Add LICENSE file
 
