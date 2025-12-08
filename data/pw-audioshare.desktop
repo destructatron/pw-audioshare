@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=PW Audioshare
+Comment=Accessible PipeWire patchbay for connecting audio, MIDI, and video ports
+GenericName=Audio Patchbay
+Exec=pw-audioshare
+Icon=audio-card
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Mixer;
+Keywords=pipewire;audio;midi;patchbay;routing;accessibility;
+StartupNotify=true
