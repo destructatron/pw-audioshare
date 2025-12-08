@@ -8,6 +8,7 @@ An accessible GTK4 patchbay for PipeWire. Unlike visual node-graph tools like He
 - Filter ports by type (Audio/MIDI/Video) and search by name
 - Bulk connect: select multiple ports and connect them at once
 - Save and load connection presets
+- **Auto-connect presets**: Activate a preset to automatically restore connections when apps start or restart
 - Full keyboard navigation
 - Screen reader accessible
 
@@ -87,9 +88,16 @@ Save your current connections as a preset to quickly restore them later:
 
 1. Click the preset menu button (floppy disk icon) in the header
 2. Select "Save Preset..." and enter a name
-3. To restore, select "Load Preset..." and choose from the list
+3. Select "Manage Presets..." to load or activate presets
 
 Presets are saved by node and port names, so they work across sessions even if port IDs change.
+
+#### Loading vs Activating
+
+- **Load Once**: Creates the preset's connections one time. If an app restarts, you'll need to load again.
+- **Activate**: Enables auto-connect mode. The preset stays active and automatically restores connections whenever matching ports appear (e.g., when apps start or restart). The active preset is shown in the window title.
+
+To deactivate auto-connect, use the "Deactivate Auto-connect" menu option. Note: Deactivating only stops watching for new connections - it does **not** remove any existing connections.
 
 Preset file location: `~/.config/pw-audioshare/presets.json`
 

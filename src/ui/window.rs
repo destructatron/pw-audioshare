@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashSet;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
@@ -55,8 +56,14 @@ mod imp {
                         <attribute name="action">win.save-preset</attribute>
                     </item>
                     <item>
-                        <attribute name="label">Load Preset...</attribute>
+                        <attribute name="label">Manage Presets...</attribute>
                         <attribute name="action">win.load-preset</attribute>
+                    </item>
+                </section>
+                <section>
+                    <item>
+                        <attribute name="label">Deactivate Auto-connect</attribute>
+                        <attribute name="action">win.deactivate-preset</attribute>
                     </item>
                 </section>
             </menu>
@@ -106,6 +113,10 @@ mod imp {
 
         // Preset storage
         pub preset_store: RefCell<PresetStore>,
+
+        // Track in-flight link creation requests to prevent duplicates
+        // Key is (output_port_id, input_port_id)
+        pub pending_links: RefCell<HashSet<(u32, u32)>>,
     }
 
     impl Default for Window {
@@ -134,6 +145,7 @@ mod imp {
                 last_port_list_was_output: RefCell::new(true),
                 pending_delete_position: RefCell::new(None),
                 preset_store: RefCell::new(PresetStore::load()),
+                pending_links: RefCell::new(HashSet::new()),
             }
         }
     }
@@ -297,6 +309,9 @@ impl Window {
                 }
 
                 self.update_status_counts();
+
+                // Check if this new port completes any auto-connect preset connections
+                self.check_auto_connect();
             }
             PwEvent::PortRemoved { id } => {
                 self.imp().pw_state.borrow_mut().ports.remove(&id);
@@ -326,6 +341,12 @@ impl Window {
                         },
                     );
                 }
+
+                // Remove from pending links (link creation confirmed)
+                self.imp()
+                    .pending_links
+                    .borrow_mut()
+                    .remove(&(output_port_id, input_port_id));
 
                 // Get labels for the link
                 let (output_label, input_label, media_type) = {
@@ -371,6 +392,20 @@ impl Window {
                 self.update_status_counts();
             }
             PwEvent::LinkRemoved { id } => {
+                // Get port IDs before removing from state (to clean up pending_links)
+                let port_ids = {
+                    let pw_state = self.imp().pw_state.borrow();
+                    pw_state
+                        .links
+                        .get(&id)
+                        .map(|l| (l.output_port_id, l.input_port_id))
+                };
+
+                // Clean up pending_links if this link was pending
+                if let Some(key) = port_ids {
+                    self.imp().pending_links.borrow_mut().remove(&key);
+                }
+
                 self.imp().pw_state.borrow_mut().links.remove(&id);
                 self.remove_link_from_list(id);
                 self.update_status_counts();
@@ -417,6 +452,9 @@ impl Window {
 
         // Setup actions
         self.setup_actions();
+
+        // Show active preset if one was saved from previous session
+        self.update_active_preset_display();
     }
 
     /// Build the filter bar with search and media type toggles
@@ -863,6 +901,17 @@ impl Window {
             }
         ));
         self.add_action(&action_load);
+
+        // Action: deactivate-preset
+        let action_deactivate = gio::SimpleAction::new("deactivate-preset", None);
+        action_deactivate.connect_activate(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_, _| {
+                window.deactivate_preset();
+            }
+        ));
+        self.add_action(&action_deactivate);
     }
 
     /// Connect the selected output port to the selected input port
@@ -1249,6 +1298,7 @@ impl Window {
     /// Show dialog to load a preset
     fn show_load_preset_dialog(&self) {
         let preset_names = self.imp().preset_store.borrow().preset_names();
+        let active_preset = self.imp().preset_store.borrow().active_preset.clone();
 
         if preset_names.is_empty() {
             self.show_toast("No presets saved yet");
@@ -1258,8 +1308,8 @@ impl Window {
         let dialog = adw::MessageDialog::builder()
             .transient_for(self)
             .modal(true)
-            .heading("Load Preset")
-            .body("Select a preset to load:")
+            .heading("Manage Presets")
+            .body("Select a preset. Use 'Activate' for auto-connect or 'Load' for one-time.")
             .build();
 
         // Create a list box with preset options
@@ -1269,10 +1319,20 @@ impl Window {
             .build();
 
         for name in &preset_names {
+            let is_active = active_preset.as_deref() == Some(name.as_str());
             let row = adw::ActionRow::builder()
                 .title(name)
+                .subtitle(if is_active { "Active (auto-connecting)" } else { "" })
                 .activatable(true)
                 .build();
+
+            // Add a checkmark icon for active preset
+            if is_active {
+                let icon = gtk::Image::from_icon_name("emblem-ok-symbolic");
+                icon.set_tooltip_text(Some("Currently active"));
+                row.add_suffix(&icon);
+            }
+
             list_box.append(&row);
         }
 
@@ -1294,17 +1354,18 @@ impl Window {
 
         dialog.add_response("cancel", "Cancel");
         dialog.add_response("delete", "Delete");
-        dialog.add_response("load", "Load");
+        dialog.add_response("load", "Load Once");
+        dialog.add_response("activate", "Activate");
         dialog.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
-        dialog.set_response_appearance("load", adw::ResponseAppearance::Suggested);
-        dialog.set_default_response(Some("load"));
+        dialog.set_response_appearance("activate", adw::ResponseAppearance::Suggested);
+        dialog.set_default_response(Some("activate"));
         dialog.set_close_response("cancel");
 
         // Handle row activation (double-click or Enter)
         let dialog_weak = dialog.downgrade();
         list_box.connect_row_activated(move |_, _| {
             if let Some(dialog) = dialog_weak.upgrade() {
-                dialog.response("load");
+                dialog.response("activate");
             }
         });
 
@@ -1323,6 +1384,12 @@ impl Window {
                     });
 
                     match response {
+                        "activate" => {
+                            dialog.close();
+                            if let Some(name) = selected_name {
+                                window.activate_preset(&name);
+                            }
+                        }
                         "load" => {
                             dialog.close();
                             if let Some(name) = selected_name {
@@ -1330,7 +1397,7 @@ impl Window {
                             }
                         }
                         "delete" => {
-                            if let Some(name) = selected_name {
+                            if let Some(name) = selected_name.clone() {
                                 window.delete_preset(&name);
                                 // Refresh dialog or close if no presets left
                                 let remaining = window.imp().preset_store.borrow().preset_names();
@@ -1457,11 +1524,172 @@ impl Window {
 
     /// Delete a preset by name
     fn delete_preset(&self, name: &str) {
+        // If deleting the active preset, deactivate it first
+        let was_active = self.imp().preset_store.borrow().is_active(name);
+        if was_active {
+            self.imp().preset_store.borrow_mut().deactivate_preset();
+        }
+
         self.imp().preset_store.borrow_mut().remove_preset(name);
+
         if let Err(e) = self.imp().preset_store.borrow().save() {
             self.show_toast(&format!("Failed to save after delete: {}", e));
         } else {
             self.show_toast(&format!("Deleted preset \"{}\"", name));
+        }
+
+        // Update display if we deactivated the preset
+        if was_active {
+            self.update_active_preset_display();
+        }
+    }
+
+    /// Check and create auto-connections for the active preset
+    /// Called when a new port is added to see if it completes any preset connections
+    fn check_auto_connect(&self) {
+        // Get the active preset's connections
+        let preset_connections: Vec<PresetConnection> = {
+            let store = self.imp().preset_store.borrow();
+            match store.get_active_preset() {
+                Some(preset) => preset.connections.clone(),
+                None => return, // No active preset
+            }
+        };
+
+        // Check each connection in the preset
+        let pw_state = self.imp().pw_state.borrow();
+        let mut links_to_create = Vec::new();
+
+        for conn in &preset_connections {
+            // Find output port by node name and port name
+            let output_port = pw_state.ports.values().find(|p| {
+                p.direction == PortDirection::Output
+                    && p.name == conn.output_port
+                    && pw_state
+                        .nodes
+                        .get(&p.node_id)
+                        .map(|n| n.name == conn.output_node)
+                        .unwrap_or(false)
+            });
+
+            // Find input port by node name and port name
+            let input_port = pw_state.ports.values().find(|p| {
+                p.direction == PortDirection::Input
+                    && p.name == conn.input_port
+                    && pw_state
+                        .nodes
+                        .get(&p.node_id)
+                        .map(|n| n.name == conn.input_node)
+                        .unwrap_or(false)
+            });
+
+            // If both ports exist and link doesn't already exist, queue it
+            if let (Some(out), Some(inp)) = (output_port, input_port) {
+                let link_key = (out.id, inp.id);
+
+                // Check if link already exists
+                let exists = pw_state
+                    .links
+                    .values()
+                    .any(|l| l.output_port_id == out.id && l.input_port_id == inp.id);
+
+                // Check if link creation is already in-flight
+                let pending = self.imp().pending_links.borrow().contains(&link_key);
+
+                if !exists && !pending {
+                    links_to_create.push(link_key);
+                }
+            }
+        }
+
+        // Release borrow before creating links
+        drop(pw_state);
+
+        // Mark links as pending and create them
+        {
+            let mut pending = self.imp().pending_links.borrow_mut();
+            for &link_key in &links_to_create {
+                pending.insert(link_key);
+            }
+        }
+
+        // Create the links
+        let count = links_to_create.len();
+        for (output_id, input_id) in links_to_create {
+            log::debug!("Auto-connecting ports {} -> {}", output_id, input_id);
+            self.create_link(output_id, input_id);
+        }
+
+        // Notify user of auto-connections (for accessibility)
+        if count > 0 {
+            if count == 1 {
+                self.show_toast("Auto-connected 1 port");
+            } else {
+                self.show_toast(&format!("Auto-connected {} ports", count));
+            }
+        }
+    }
+
+    /// Activate a preset for auto-connecting
+    pub fn activate_preset(&self, name: &str) {
+        {
+            let mut store = self.imp().preset_store.borrow_mut();
+            store.activate_preset(name);
+        }
+
+        // Save the activation state
+        if let Err(e) = self.imp().preset_store.borrow().save() {
+            self.show_toast(&format!("Failed to save: {}", e));
+            return;
+        }
+
+        // Immediately try to establish any connections
+        self.check_auto_connect();
+
+        self.show_toast(&format!("Activated preset \"{}\"", name));
+        self.update_active_preset_display();
+    }
+
+    /// Deactivate the current preset
+    pub fn deactivate_preset(&self) {
+        let name = {
+            let store = self.imp().preset_store.borrow();
+            store.active_preset.clone()
+        };
+
+        // Nothing to deactivate
+        if name.is_none() {
+            self.show_toast("No preset is currently active");
+            return;
+        }
+
+        {
+            self.imp().preset_store.borrow_mut().deactivate_preset();
+        }
+
+        if let Err(e) = self.imp().preset_store.borrow().save() {
+            self.show_toast(&format!("Failed to save: {}", e));
+            return;
+        }
+
+        if let Some(name) = name {
+            self.show_toast(&format!("Deactivated preset \"{}\"", name));
+        }
+        self.update_active_preset_display();
+    }
+
+    /// Update the UI to show which preset is active
+    fn update_active_preset_display(&self) {
+        let active_name = {
+            let store = self.imp().preset_store.borrow();
+            store.active_preset.clone()
+        };
+
+        // Update subtitle to show active preset
+        if let Some(name) = active_name {
+            self.set_title(Some(&format!("PW Audioshare - [{}]", name)));
+        } else {
+            self.set_title(Some("PW Audioshare"));
         }
     }
 }

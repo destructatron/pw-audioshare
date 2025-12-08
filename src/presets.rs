@@ -25,6 +25,9 @@ pub struct Preset {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PresetStore {
     pub presets: HashMap<String, Preset>,
+    /// Name of the currently active (auto-connecting) preset, if any
+    #[serde(default)]
+    pub active_preset: Option<String>,
 }
 
 impl PresetStore {
@@ -92,5 +95,29 @@ impl PresetStore {
         let mut names: Vec<_> = self.presets.keys().cloned().collect();
         names.sort();
         names
+    }
+
+    /// Activate a preset for auto-connecting
+    pub fn activate_preset(&mut self, name: &str) {
+        if self.presets.contains_key(name) {
+            self.active_preset = Some(name.to_string());
+        }
+    }
+
+    /// Deactivate the current preset
+    pub fn deactivate_preset(&mut self) {
+        self.active_preset = None;
+    }
+
+    /// Get the currently active preset, if any
+    pub fn get_active_preset(&self) -> Option<&Preset> {
+        self.active_preset
+            .as_ref()
+            .and_then(|name| self.presets.get(name))
+    }
+
+    /// Check if a preset is currently active
+    pub fn is_active(&self, name: &str) -> bool {
+        self.active_preset.as_deref() == Some(name)
     }
 }
