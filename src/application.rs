@@ -7,17 +7,20 @@ use std::sync::mpsc;
 use crate::config::APP_ID;
 use crate::pipewire::{PipeWireThread, PwEvent};
 use crate::presets::PresetStore;
+use crate::settings::Settings;
 use crate::tray::{self, TrayCommand, TrayHandle};
 use crate::ui::Window;
 
 mod imp {
     use super::*;
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
 
     pub struct Application {
         pub pw_thread: RefCell<Option<PipeWireThread>>,
         pub tray_handle: RefCell<Option<TrayHandle>>,
         pub tray_rx: RefCell<Option<mpsc::Receiver<TrayCommand>>>,
+        /// Track if this is the first activation (startup)
+        pub first_activation: Cell<bool>,
     }
 
     impl Default for Application {
@@ -26,6 +29,7 @@ mod imp {
                 pw_thread: RefCell::new(None),
                 tray_handle: RefCell::new(None),
                 tray_rx: RefCell::new(None),
+                first_activation: Cell::new(true),
             }
         }
     }
@@ -42,8 +46,31 @@ mod imp {
     impl ApplicationImpl for Application {
         fn activate(&self) {
             let app = self.obj();
-            let window = app.create_window();
-            window.present();
+
+            // Check if this is the first activation (startup)
+            let is_first = self.first_activation.get();
+            if is_first {
+                self.first_activation.set(false);
+
+                // Check if we should start minimized
+                let settings = Settings::load();
+                if settings.start_minimized {
+                    log::info!("Starting minimized to tray");
+                    // Create window but don't show it
+                    let _window = app.create_window();
+                    // Window is created but not presented - will be shown via tray
+                    return;
+                }
+            }
+
+            // Normal activation: show the window
+            if let Some(window) = app.active_window() {
+                window.set_visible(true);
+                window.present();
+            } else {
+                let window = app.create_window();
+                window.present();
+            }
         }
 
         fn startup(&self) {

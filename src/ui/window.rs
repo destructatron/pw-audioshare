@@ -11,6 +11,7 @@ use gtk::{gio, glib};
 use crate::model::{LinkObject, PortObject};
 use crate::pipewire::{PortDirection, PwEvent, PwState, UiCommand};
 use crate::presets::{Preset, PresetConnection, PresetStore};
+use crate::settings::Settings;
 
 mod imp {
     use super::*;
@@ -66,6 +67,12 @@ mod imp {
                         <attribute name="action">win.deactivate-preset</attribute>
                     </item>
                 </section>
+                <section>
+                    <item>
+                        <attribute name="label">Start Minimized to Tray</attribute>
+                        <attribute name="action">win.start-minimized</attribute>
+                    </item>
+                </section>
             </menu>
         </interface>
     "#)]
@@ -117,6 +124,9 @@ mod imp {
         // Track in-flight link creation requests to prevent duplicates
         // Key is (output_port_id, input_port_id)
         pub pending_links: RefCell<HashSet<(u32, u32)>>,
+
+        // Application settings
+        pub settings: RefCell<Settings>,
     }
 
     impl Default for Window {
@@ -146,6 +156,7 @@ mod imp {
                 pending_delete_position: RefCell::new(None),
                 preset_store: RefCell::new(PresetStore::load()),
                 pending_links: RefCell::new(HashSet::new()),
+                settings: RefCell::new(Settings::load()),
             }
         }
     }
@@ -912,6 +923,25 @@ impl Window {
             }
         ));
         self.add_action(&action_deactivate);
+
+        // Action: start-minimized (stateful toggle)
+        let start_minimized = self.imp().settings.borrow().start_minimized;
+        let action_start_minimized =
+            gio::SimpleAction::new_stateful("start-minimized", None, &start_minimized.to_variant());
+        action_start_minimized.connect_activate(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |action, _| {
+                let current = action
+                    .state()
+                    .and_then(|v| v.get::<bool>())
+                    .unwrap_or(false);
+                let new_state = !current;
+                action.set_state(&new_state.to_variant());
+                window.set_start_minimized(new_state);
+            }
+        ));
+        self.add_action(&action_start_minimized);
     }
 
     /// Connect the selected output port to the selected input port
@@ -1690,6 +1720,25 @@ impl Window {
             self.set_title(Some(&format!("PW Audioshare - [{}]", name)));
         } else {
             self.set_title(Some("PW Audioshare"));
+        }
+    }
+
+    /// Set the start minimized setting and save it
+    fn set_start_minimized(&self, minimized: bool) {
+        {
+            let mut settings = self.imp().settings.borrow_mut();
+            settings.start_minimized = minimized;
+        }
+
+        if let Err(e) = self.imp().settings.borrow().save() {
+            self.show_toast(&format!("Failed to save settings: {}", e));
+            return;
+        }
+
+        if minimized {
+            self.show_toast("Will start minimized to tray");
+        } else {
+            self.show_toast("Will start with window visible");
         }
     }
 }

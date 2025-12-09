@@ -3,6 +3,7 @@ mod config;
 mod model;
 mod pipewire;
 mod presets;
+mod settings;
 mod tray;
 mod ui;
 
