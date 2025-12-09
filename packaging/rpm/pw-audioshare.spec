@@ -1,5 +1,5 @@
 Name:           pw-audioshare
-Version:        1.0.5
+Version:        1.0.6
 Release:        1%{?dist}
 Summary:        An accessible GTK4 patchbay for PipeWire
 
@@ -55,6 +55,9 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_datadir}/applications/%{name}.desktop
 
 %changelog
+* Tue Dec 09 2025 Harley Richardson <destructatron2018@gmail.com> - 1.0.6-1
+- Add start minimized to tray setting
+
 * Mon Dec 08 2025 Harley Richardson <destructatron2018@gmail.com> - 1.0.5-1
 - Add .desktop file for application launchers
 
