@@ -21,15 +21,16 @@ An accessible GTK4 patchbay for PipeWire. Unlike visual node-graph tools like He
 - libadwaita (1.4+)
 - PipeWire development libraries
 - Rust 1.75+
+- Clang with development files (21+ known to work)
 
 On Fedora:
 ```bash
-sudo dnf install rust cargo gtk4-devel libadwaita-devel pipewire-devel
+sudo dnf install rust cargo gtk4-devel libadwaita-devel pipewire-devel clang clang-devel
 ```
 
 On Debian/Ubuntu:
 ```bash
-sudo apt install rustc cargo libgtk-4-dev libadwaita-1-dev libpipewire-0.3-dev
+sudo apt install rustc cargo libgtk-4-dev libadwaita-1-dev libpipewire-0.3-dev clang libclang-dev
 ```
 
 ### Building
