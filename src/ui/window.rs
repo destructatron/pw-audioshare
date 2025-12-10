@@ -24,25 +24,21 @@ mod imp {
                 <property name="default-width">900</property>
                 <property name="default-height">700</property>
                 <child>
-                    <object class="AdwToastOverlay" id="toast_overlay">
+                    <object class="GtkBox" id="main_box">
+                        <property name="orientation">vertical</property>
                         <child>
-                            <object class="GtkBox" id="main_box">
-                                <property name="orientation">vertical</property>
-                                <child>
-                                    <object class="AdwHeaderBar">
-                                        <property name="title-widget">
-                                            <object class="AdwWindowTitle">
-                                                <property name="title">PW Audioshare</property>
-                                                <property name="subtitle">PipeWire Patchbay</property>
-                                            </object>
-                                        </property>
-                                        <child type="end">
-                                            <object class="GtkMenuButton" id="preset_menu_button">
-                                                <property name="icon-name">document-save-symbolic</property>
-                                                <property name="tooltip-text">Presets</property>
-                                                <property name="menu-model">preset_menu</property>
-                                            </object>
-                                        </child>
+                            <object class="AdwHeaderBar">
+                                <property name="title-widget">
+                                    <object class="AdwWindowTitle">
+                                        <property name="title">PW Audioshare</property>
+                                        <property name="subtitle">PipeWire Patchbay</property>
+                                    </object>
+                                </property>
+                                <child type="end">
+                                    <object class="GtkMenuButton" id="preset_menu_button">
+                                        <property name="icon-name">document-save-symbolic</property>
+                                        <property name="tooltip-text">Presets</property>
+                                        <property name="menu-model">preset_menu</property>
                                     </object>
                                 </child>
                             </object>
@@ -77,8 +73,6 @@ mod imp {
         </interface>
     "#)]
     pub struct Window {
-        #[template_child]
-        pub toast_overlay: TemplateChild<adw::ToastOverlay>,
         #[template_child]
         pub main_box: TemplateChild<gtk::Box>,
 
@@ -132,7 +126,6 @@ mod imp {
     impl Default for Window {
         fn default() -> Self {
             Self {
-                toast_overlay: TemplateChild::default(),
                 main_box: TemplateChild::default(),
                 output_ports: gio::ListStore::new::<PortObject>(),
                 input_ports: gio::ListStore::new::<PortObject>(),
@@ -435,7 +428,7 @@ impl Window {
             PwEvent::Error { message } => {
                 log::error!("PipeWire error: {}", message);
                 self.update_status(&format!("Error: {}", message), false);
-                self.show_toast(&message);
+                self.announce(&message);
             }
         }
     }
@@ -967,7 +960,7 @@ impl Window {
         };
 
         if output_ports.is_empty() {
-            self.show_toast("No output ports selected");
+            self.announce("No output ports selected");
             return;
         }
 
@@ -992,7 +985,7 @@ impl Window {
         };
 
         if input_ports.is_empty() {
-            self.show_toast("No input ports selected");
+            self.announce("No input ports selected");
             return;
         }
 
@@ -1026,7 +1019,7 @@ impl Window {
         }
 
         if count > 1 {
-            self.show_toast(&format!("Created {} connections", count));
+            self.announce(&format!("Created {} connections", count));
         }
     }
 
@@ -1228,11 +1221,16 @@ impl Window {
         }
     }
 
-    /// Show a toast notification
-    fn show_toast(&self, message: &str) {
-        let toast = adw::Toast::new(message);
-        toast.set_timeout(5);
-        self.imp().toast_overlay.add_toast(toast);
+    /// Announce a message to screen readers
+    fn announce(&self, message: &str) {
+        use gtk::AccessibleAnnouncementPriority;
+        self.announce_with_priority(message, AccessibleAnnouncementPriority::Medium);
+    }
+
+    /// Announce a message to screen readers with a specific priority
+    fn announce_with_priority(&self, message: &str, priority: gtk::AccessibleAnnouncementPriority) {
+        use gtk::prelude::AccessibleExt;
+        self.upcast_ref::<gtk::Widget>().announce(message, priority);
     }
 
     /// Show dialog to save current connections as a preset
@@ -1269,7 +1267,7 @@ impl Window {
                     if response == "save" {
                         let name = entry.text().trim().to_string();
                         if name.is_empty() {
-                            window.show_toast("Preset name cannot be empty");
+                            window.announce("Preset name cannot be empty");
                             return;
                         }
                         window.save_preset(&name);
@@ -1306,7 +1304,7 @@ impl Window {
         };
 
         if connections.is_empty() {
-            self.show_toast("No connections to save");
+            self.announce("No connections to save");
             return;
         }
 
@@ -1319,9 +1317,9 @@ impl Window {
         self.imp().preset_store.borrow_mut().add_preset(preset);
 
         if let Err(e) = self.imp().preset_store.borrow().save() {
-            self.show_toast(&format!("Failed to save preset: {}", e));
+            self.announce(&format!("Failed to save preset: {}", e));
         } else {
-            self.show_toast(&format!("Saved preset \"{}\" with {} connections", name, count));
+            self.announce(&format!("Saved preset \"{}\" with {} connections", name, count));
         }
     }
 
@@ -1331,7 +1329,7 @@ impl Window {
         let active_preset = self.imp().preset_store.borrow().active_preset.clone();
 
         if preset_names.is_empty() {
-            self.show_toast("No presets saved yet");
+            self.announce("No presets saved yet");
             return;
         }
 
@@ -1433,7 +1431,7 @@ impl Window {
                                 let remaining = window.imp().preset_store.borrow().preset_names();
                                 if remaining.is_empty() {
                                     dialog.close();
-                                    window.show_toast("No presets remaining");
+                                    window.announce("No presets remaining");
                                 } else {
                                     // Remove the row from list
                                     if let Some(row) = list_box.selected_row() {
@@ -1468,7 +1466,7 @@ impl Window {
         let preset = match preset {
             Some(p) => p,
             None => {
-                self.show_toast(&format!("Preset \"{}\" not found", name));
+                self.announce(&format!("Preset \"{}\" not found", name));
                 return;
             }
         };
@@ -1538,14 +1536,14 @@ impl Window {
         }
 
         if created > 0 && skipped == 0 {
-            self.show_toast(&format!("Loaded preset \"{}\": {} connections", name, created));
+            self.announce(&format!("Loaded preset \"{}\": {} connections", name, created));
         } else if created > 0 {
-            self.show_toast(&format!(
+            self.announce(&format!(
                 "Loaded preset \"{}\": {} created, {} skipped",
                 name, created, skipped
             ));
         } else if skipped > 0 {
-            self.show_toast(&format!(
+            self.announce(&format!(
                 "Preset \"{}\": all {} connections already exist or unavailable",
                 name, skipped
             ));
@@ -1563,9 +1561,9 @@ impl Window {
         self.imp().preset_store.borrow_mut().remove_preset(name);
 
         if let Err(e) = self.imp().preset_store.borrow().save() {
-            self.show_toast(&format!("Failed to save after delete: {}", e));
+            self.announce(&format!("Failed to save after delete: {}", e));
         } else {
-            self.show_toast(&format!("Deleted preset \"{}\"", name));
+            self.announce(&format!("Deleted preset \"{}\"", name));
         }
 
         // Update display if we deactivated the preset
@@ -1653,9 +1651,9 @@ impl Window {
         // Notify user of auto-connections (for accessibility)
         if count > 0 {
             if count == 1 {
-                self.show_toast("Auto-connected 1 port");
+                self.announce("Auto-connected 1 port");
             } else {
-                self.show_toast(&format!("Auto-connected {} ports", count));
+                self.announce(&format!("Auto-connected {} ports", count));
             }
         }
     }
@@ -1669,14 +1667,14 @@ impl Window {
 
         // Save the activation state
         if let Err(e) = self.imp().preset_store.borrow().save() {
-            self.show_toast(&format!("Failed to save: {}", e));
+            self.announce(&format!("Failed to save: {}", e));
             return;
         }
 
         // Immediately try to establish any connections
         self.check_auto_connect();
 
-        self.show_toast(&format!("Activated preset \"{}\"", name));
+        self.announce(&format!("Activated preset \"{}\"", name));
         self.update_active_preset_display();
     }
 
@@ -1689,7 +1687,7 @@ impl Window {
 
         // Nothing to deactivate
         if name.is_none() {
-            self.show_toast("No preset is currently active");
+            self.announce("No preset is currently active");
             return;
         }
 
@@ -1698,12 +1696,12 @@ impl Window {
         }
 
         if let Err(e) = self.imp().preset_store.borrow().save() {
-            self.show_toast(&format!("Failed to save: {}", e));
+            self.announce(&format!("Failed to save: {}", e));
             return;
         }
 
         if let Some(name) = name {
-            self.show_toast(&format!("Deactivated preset \"{}\"", name));
+            self.announce(&format!("Deactivated preset \"{}\"", name));
         }
         self.update_active_preset_display();
     }
@@ -1731,14 +1729,14 @@ impl Window {
         }
 
         if let Err(e) = self.imp().settings.borrow().save() {
-            self.show_toast(&format!("Failed to save settings: {}", e));
+            self.announce(&format!("Failed to save settings: {}", e));
             return;
         }
 
         if minimized {
-            self.show_toast("Will start minimized to tray");
+            self.announce("Will start minimized to tray");
         } else {
-            self.show_toast("Will start with window visible");
+            self.announce("Will start with window visible");
         }
     }
 }
