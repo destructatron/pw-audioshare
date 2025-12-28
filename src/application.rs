@@ -183,8 +183,10 @@ impl Application {
     /// Process events from PipeWire thread
     async fn process_pw_events(&self, rx: Receiver<PwEvent>) {
         while let Ok(event) = rx.recv().await {
-            // Dispatch to the active window
-            if let Some(window) = self.active_window() {
+            // Get any window, not just the "active" one.
+            // active_window() returns None when the window is hidden (e.g., minimized to tray),
+            // but windows() returns all toplevel windows regardless of visibility.
+            if let Some(window) = self.windows().into_iter().next() {
                 if let Some(window) = window.downcast_ref::<Window>() {
                     window.handle_pw_event(event);
                 }

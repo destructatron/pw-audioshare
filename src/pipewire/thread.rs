@@ -65,6 +65,11 @@ impl Drop for PipeWireThread {
 struct ThreadState {
     event_tx: Sender<PwEvent>,
     core: Core,
+    /// Store created links to keep them alive without leaking memory.
+    /// The `object.linger = true` property ensures PipeWire keeps the connection
+    /// even after the proxy is dropped, but we need to keep the proxy alive
+    /// while the app is running.
+    created_links: Vec<Link>,
 }
 
 /// Run the PipeWire main loop
@@ -84,6 +89,7 @@ fn run_pipewire_loop(
     let state = Rc::new(RefCell::new(ThreadState {
         event_tx: event_tx.clone(),
         core: core.clone(),
+        created_links: Vec::new(),
     }));
 
     // Set up registry listener for global object events
@@ -255,9 +261,9 @@ fn handle_create_link(
     // Create the link using the core
     let link: Link = state.core.create_object("link-factory", &props)?;
 
-    // Prevent the link proxy from being dropped immediately
-    // The link will persist due to object.linger = true
-    std::mem::forget(link);
+    // Store the link to keep it alive. When ThreadState is dropped during
+    // shutdown, links will be properly cleaned up.
+    state.created_links.push(link);
 
     Ok(())
 }
