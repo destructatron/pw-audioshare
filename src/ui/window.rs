@@ -660,7 +660,7 @@ impl Window {
             self.imp().input_list_view.replace(Some(list_view.clone()));
         }
 
-        // Keyboard navigation: Enter to connect, Left/Right to switch lists, Ctrl+Down to connections
+        // Keyboard navigation: Enter to connect, Left/Right to switch lists, F6 to connections
         let key_controller = gtk::EventControllerKey::new();
         key_controller.connect_key_pressed(glib::clone!(
             #[weak(rename_to = window)]
@@ -675,8 +675,8 @@ impl Window {
                         window.connect_selected();
                         Propagation::Stop
                     }
-                    // Ctrl+Down: jump to connections list, remember which list we came from
-                    Key::Down | Key::KP_Down if ctrl => {
+                    // F6: jump to connections list, remember which list we came from
+                    Key::F6 => {
                         window.imp().last_port_list_was_output.replace(is_output);
                         window.focus_connections_list();
                         Propagation::Stop
@@ -813,16 +813,15 @@ impl Window {
             self,
             #[upgrade_or]
             Propagation::Proceed,
-            move |_, key, _, modifiers| {
-                let ctrl = modifiers.contains(gtk::gdk::ModifierType::CONTROL_MASK);
+            move |_, key, _, _modifiers| {
                 match key {
                     // Delete selected connection
                     Key::Delete | Key::KP_Delete | Key::BackSpace => {
                         window.delete_selected_connection();
                         Propagation::Stop
                     }
-                    // Ctrl+Up: jump back to the port list we came from
-                    Key::Up | Key::KP_Up if ctrl => {
+                    // F6: jump back to the port list we came from
+                    Key::F6 => {
                         if *window.imp().last_port_list_was_output.borrow() {
                             window.focus_output_list();
                         } else {
